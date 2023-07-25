@@ -1,0 +1,342 @@
+---
+title: "smSNP_analysis"
+author: "yao"
+date: "2023-06-21"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(ggsci)
+library(ggplot2)
+library(ggpubr)
+library(reshape2)
+library(tidyr)
+library(survival)
+library(survminer)
+library(sigminer)
+library(MutationalPatterns)
+library(CMplot)
+library(stringr)
+
+setwd("/Users/wangmengyao/Downloads/SpecComplex/dbsnp")
+
+
+```
+
+## Figure1
+```{r fig1, echo=TRUE}
+cdata <- read.table("summary.frequency.txt", header=F)
+colnames(cdata) <- c("gene", "chr", "pos", "count", "Frequency", "dbSNP_freq", "info", "sample","snpid")
+ccdata <- cdata[cdata$count>3,]
+ggplot(data=ccdata, aes(x=dbSNP_freq, y=Frequency, color=Frequency),label=Gene) + geom_point(size=2) + scale_color_gradient(low="lightblue", high="darkblue") +  theme_bw() + theme(panel.grid = element_blank()) +  ylab("Frequency in TCGA") + xlab("Frequency in dbSNP") + geom_text(data = subset(ccdata, ccdata$Frequency > 0.02 ), aes(label = snpid), size = 3, show.legend = FALSE )
+#fig1a
+fdata <- read.table("smSNPs.recurrent.freq.dis.txt", header=T, sep="\t")
+ggplot(fdata,aes(x=Count,y=freq,color=group)) + geom_line() +  theme_bw() +  theme(axis.text.x=element_text(size=8), axis.text.y = element_text(size=8), panel.grid = element_blank()) + xlab("The number of Mutation Recurrence") + ylab("Frequency") + scale_x_continuous(trans="log10", limits = c(1,250), breaks = c(1, 2, 3, 4, 5,6,7, 100, 200, 300))
+
+#fig1b
+idata <- read.table("mutation.type.compare.txt",header=T)
+idata1 <- idata[1:6,]
+row.names(idata1) <- idata1$Type
+idata1$smSNP <- idata1$smSNP/idata[7,2]
+idata1$TCGA <- idata1$TCGA/idata[7,3]
+iidata <- melt(idata1)
+colors <- pal_npg(alpha =0.9)(2)
+ggplot(iidata, aes(x = Type, y = value)) +  geom_col(aes(color = variable, fill = variable), position = position_dodge(0.8), width = 0.7) + scale_color_manual(values = colors) +  scale_fill_manual(values = colors) + theme_bw() + theme( panel.grid = element_blank()) + xlab("Type") + ylab("Percentage")
+
+#fig1c,d
+sdata <- read.table("tcga.smSNPs.rate.txt",header=T,sep="\t")
+sdata$Age <- sdata$age > 60
+sdata1 <- sdata %>% drop_na(Age)
+colors <- pal_npg(alpha =0.9)(2)
+sdata2 <- sdata1[sdata1$cancer %in% c("LGG", "READ", "SKCM", "STAD", "UCEC"),]
+#sdata2 <- sdata2[sdata2$smSNPs<500,]
+
+#sdata2$rate <- sdata2$CpG.CtoT / sdata2$smSNPs
+p1 <- ggplot(data = sdata1) + geom_boxplot(mapping = aes(x = cancer, y = smSNPs_rate, color=Age),outlier.size = 0.2) + theme_bw()+ theme(axis.text.y=element_text(size=8), axis.text.x = element_text(size=8,angle =90,hjust =0.5,vjust = 0.5), strip.text.y = element_text(size=10), panel.grid = element_blank()) + scale_color_manual(values = colors) +  scale_fill_manual(values = colors) + xlab("Cancer Type") + ylab("smSNPs rate") + coord_cartesian(ylim=c(0,0.3)) + guides(color = guide_legend( nrow = 1, byrow = TRUE))
+#ggplot(data = sdata2) + geom_boxplot(mapping = aes(x = cancer, y = rate, color=Age),outlier.size = 0.2) + theme_bw()+ theme(axis.text.y=element_text(size=8), axis.text.x = element_text(size=8), strip.text.y = element_text(size=10), panel.grid = element_blank()) + scale_color_manual(values = colors) +  scale_fill_manual(values = colors) + xlab("Cancer Type") + ylab("CpG C->T smSNPs rate") + coord_cartesian(ylim=c(0,0.5)) + guides(color = guide_legend( nrow = 1, byrow = TRUE))
+
+p2 <- ggplot(data = sdata1) + geom_boxplot(mapping = aes(x = cancer, y = smSNPs, color=Age),outlier.size = 0.2) + theme_bw()+ theme(axis.text.y=element_text(size=8), axis.text.x = element_text(size=8,angle =90,hjust =0.5,vjust = 0.5), strip.text.y = element_text(size=10), panel.grid = element_blank()) + scale_color_manual(values = colors) +  scale_fill_manual(values = colors) + xlab("Cancer Type") + ylab("smSNPs count") + coord_cartesian(ylim=c(0,500)) + guides(color = guide_legend( nrow = 1, byrow = TRUE))
+
+P1 <- ggplot(data = sdata1) + geom_boxplot(mapping = aes(x = Age, y = smSNPs_rate, color=Age),outlier.size = 0.2) + theme_bw()+ theme(axis.text.y=element_text(size=8), axis.text.x = element_text(size=8), strip.text.y = element_text(size=10), panel.grid = element_blank()) + scale_color_manual(values = colors) +  scale_fill_manual(values = colors) + xlab("Age") + ylab("smSNPs rate") + coord_cartesian(ylim=c(0,0.3)) + guides(color = guide_legend( nrow = 1, byrow = TRUE))
+P2 <- ggplot(data = sdata2) + geom_boxplot(mapping = aes(x = Age, y = smSNPs, color=Age),outlier.size = 0.2) + theme_bw()+ theme(axis.text.y=element_text(size=8), axis.text.x = element_text(size=8), strip.text.y = element_text(size=10), panel.grid = element_blank()) + scale_color_manual(values = colors) +  scale_fill_manual(values = colors) + xlab("Age") + ylab("smSNPs count") + coord_cartesian(ylim=c(0,500)) + guides(color = guide_legend( nrow = 1, byrow = TRUE))
+
+pdf(file="merge.smSNPs_rate_cancer.pdf", height = 6, width=8)
+pp <- ggarrange(p1,p2, ncol=1, common.legend=T, legend="bottom", labels=c("A","B"))
+pp
+dev.off()
+pdf(file="merge.smSNPs_rate_age.pdf", height = 4, width=10)
+pp <- ggarrange(P1,P2, ncol=2, common.legend=T, legend="bottom", labels=c("A","B"))
+pp
+dev.off()
+
+colors <- pal_npg(alpha =0.9)(5)
+p3 <- ggplot(data=sdata) + geom_boxplot(mapping=aes(x=Stage, y=smSNPs_rate, color=Stage), outlier.size = 0.5) +scale_color_manual(values=colors) + theme_bw()+ theme(axis.text.y=element_text(size=8), axis.text.x = element_text(size=6), strip.text.y = element_text(size=10), panel.grid = element_blank(), legend.position = "none") + xlab("Stage") + ylab("smSNPs rate") +  scale_y_continuous(trans="log10")
+t.test(sdata[sdata$Stage=="I",]$smSNPs_rate, sdata[!grepl("I",sdata$Stage),]$smSNPs_rate)
+pdf(file="smSNPs.rate.stage.pdf", height=4,width=10)
+p3
+dev.off()
+
+
+#Supplementary Fig3a
+ssdata <- read.table("tcga.smSNPs.rate.txt",header=T,sep="\t")
+ssdata <- ssdata[ssdata$smSNPs>0,]
+ssdata$rate <- ssdata$CpG.CtoT / ssdata$smSNPs
+ggplot(data=ssdata) + geom_boxplot(mapping=aes(y=cancer,x=smSNPs_rate,color=cancer), outlier.size = 0.5)  + theme_bw()+ theme(axis.text.y=element_text(size=8), axis.text.x = element_text(size=6), strip.text.y = element_text(size=10), panel.grid = element_blank(), legend.position = "none") + ylab("Cancer") + xlab("smSNPs_rate")
+ggplot(data=ssdata) + geom_boxplot(mapping=aes(y=cancer,x=rate,color=cancer), outlier.size = 0.5)  + theme_bw()+ theme(axis.text.y=element_text(size=8), axis.text.x = element_text(size=6), strip.text.y = element_text(size=10), panel.grid = element_blank(), legend.position = "none") + ylab("Cancer") + xlab("CpG.CtoT_smSNPs_rate")
+
+#fig1e
+ssdata <- sdata[sdata$Stage != "NA",]
+smSNPs_rate_model <- coxph(Surv(PFStime, PFS) ~ age + gender + Stage + smSNPs_rate, data=ssdata )
+print(ggforest(smSNPs_rate_model, data=ssdata))
+
+#PCAWG
+sdata <- read.table("PCAWG.smSNPs.rate.txt",header=T)
+sdata$Cancer <- str_split_fixed(sdata$cancer, "-",2)[,1]
+smSNPs_rate_model <- coxph(Surv(OStime, OS) ~ age + gender + smSNPs_rate, data=sdata )
+print(ggforest(smSNPs_rate_model, data=sdata))
+sdata$smSNPs_rate_cut <- sdata$smSNPs_rate > 0.02017508
+surv_object <- Surv(time = sdata$OStime, event = sdata$OS)
+fit <- survfit(surv_object ~ smSNPs_rate_cut, data = sdata)
+ggsurvplot(fit, data = sdata, pval = TRUE, title="PCAWG.OS")
+
+```
+
+## Supplementary Figure1
+```{r sfig1, echo=TRUE}
+#figs1a,b
+vdata <- read.table("TCGA.readcount.txt", header = T, sep="\t")
+ggplot(vdata, aes(x=tvaf, color=Class)) + geom_density() + theme_bw() + theme(axis.text.x=element_text(size=8), axis.text.y = element_text(size=8), panel.grid = element_blank())
+ggplot(vdata, aes(x=nvaf, color=Class)) + geom_density() +theme_bw() + theme(axis.text.x=element_text(size=8), axis.text.y = element_text(size=8), panel.grid = element_blank()) + scale_x_continuous(limits = c(0,0.1))
+
+#figs1c
+sdata2 <- sdata[sdata$cancer=="SKCM",]
+smSNPs_rate_model <- coxph(Surv(OStime, OS) ~ age + gender + Stage + smSNPs_rate, data=sdata2 ) 
+print(ggforest(smSNPs_rate_model, data=sdata2))
+#figs1d
+sdata2 <- sdata[sdata$cancer=="UCEC",]
+smSNPs_rate_model <- coxph(Surv(OStime, OS) ~ age  + smSNPs_rate, data=sdata2 ) 
+print(ggforest(smSNPs_rate_model, data=sdata2))
+  
+
+```
+
+## Figure2
+```{r fig2, echo=TRUE}
+#fig2a,b,c
+#cosine similarity of smSNPs and SBS1
+#x1 <- get_sig_db("SBS_hg38")
+#aa <- x1$db
+#SBS <- aa[order(row.names(aa)),]
+#ttdata <- read.table("merge.96.context2.txt",header=T,row.names=1)
+#cos_sim(SBS[,1],ttdata[order(row.names(ttdata)),1])
+#Rscript mut_context.R tcga tcga.context.hg38.vcf
+#Rscript mut_context.R smsnps smsnps.context.hg38.vcf
+#Rscript mut_context.R dbsnps dbsnps.context.hg38.vcf
+
+colors <- rev(pal_npg(alpha =0.9)(2))
+
+sdata <- read.table("smSNPs.cancertype.sbs_sig_fit.txt",header=T,sep="\t",row.names=1)
+sdata1 <- sdata[colSums(sdata)>1]
+sdata1$SBS54 <- NULL
+idata <- read.table("smSNPs.cancertype.id_sig_fit.txt",header=T,sep="\t",row.names=1)
+idata1 <- idata[colSums(idata)>1]
+
+ddata <- read.table("smSNPs.cancertype.dbs_sig_fit.txt",header=T,sep="\t",row.names=1)
+ddata1 <- ddata[colSums(ddata)>1]
+
+idata1$sample <- rownames(idata1)
+idata2 <- melt(idata1)
+idata2$group <- "smSNPs"
+
+sdata1$sample <- rownames(sdata1)
+sdata2 <- melt(sdata1)
+sdata2$group <- "smSNPs"
+
+ddata1$sample <- rownames(ddata1)
+ddata2 <- melt(ddata1)
+ddata2$group <- "smSNPs"
+stdata <- read.table("tcga.cancertype.sbs_sig_fit.txt",header=T,sep="\t",row.names=1)
+stdata$sample <- rownames(stdata)
+stdata1 <- stdata[,colnames(sdata1)]
+
+itdata <- read.table("tcga.cancertype.id_sig_fit.txt",header=T,sep="\t",row.names=1)
+itdata$sample <- rownames(itdata)
+itdata1 <- itdata[,colnames(idata1)]
+
+dtdata <- read.table("tcga.cancertype.dbs_sig_fit.txt",header=T,sep="\t",row.names=1)
+dtdata$sample <- rownames(dtdata)
+dtdata1 <- dtdata[,colnames(ddata1)]
+
+stdata2 <- melt(stdata1)
+stdata2$group <- "TCGA"
+itdata2 <- melt(itdata1)
+itdata2$group <- "TCGA"
+dtdata2 <- melt(dtdata1)
+dtdata2$group <- "TCGA"
+
+msdata <- rbind(sdata2, stdata2)
+midata <- rbind(idata2, itdata2)
+mddata <- rbind(ddata2, dtdata2)
+colnames(msdata) <- c("cancer","signature","contribution","group")
+colnames(midata) <- c("cancer","signature","contribution","group")
+colnames(mddata) <- c("cancer","signature","contribution","group")
+
+#fig2d
+ggplot(data = msdata, aes(x=cancer,y=contribution,fill=cancer)) + geom_bar(stat="identity",show.legend = F) + facet_grid(signature ~ group) +scale_y_continuous() + theme_bw() + theme(axis.text.x=element_text(size=8,angle =90,hjust =0.5,vjust = 0.5), axis.text.y = element_text(size=8), strip.text.y = element_text(size=10), panel.grid = element_blank()) + xlab("Cancer Type") + ylab("contribution")
+
+#fig2e
+sigs <- c("SBS1", "SBS10a", "SBS10b", "SBS15")
+sdata <- read.table("merge.SBS.signature.cosmic.contribution.txt",header=T,sep="\t")
+ssdata <- sdata[sdata$smSNPs_num>500 & sdata$Cancer == "UCEC",]
+ssdata1 <- ssdata[ssdata$signature %in% sigs,]
+
+p1 <- ggplot(ssdata1,aes(y=signature,x=Sample,fill=Sig_smSNPs)) + xlab("") + ylab("") + geom_tile(color="white",size=0.1) + scale_fill_gradient(low = "gray95", high = "tomato") + geom_text(aes(label=round(Sig_smSNPs,2)),angle=45, size=2) +  ggtitle("smSNPs") + theme_minimal() +  theme(panel.grid = element_blank(), axis.text.x =element_text(angle =45,hjust =0.5,vjust = 0.5, size=8))
+p2 <- ggplot(ssdata1,aes(y=signature,x=Sample,fill=Sig_TCGA)) + xlab("") + ylab("") + geom_tile(color="white",size=
+0.1) + scale_fill_gradient(low = "gray95", high = "tomato") + geom_text(aes(label=round(Sig_TCGA,2)),angle=45, size=2) +  ggtitle("TCGA") + theme_minimal() +  theme(panel.grid = element_blank(), axis.text.x =element_text(angle =45,hjust =0.5,vjust = 0.5, size=8))
+pp <- ggarrange(p1,p2,ncol=1,nrow=2,common.legend=T,legend="bottom",labels=c("A","B"))
+pp
+
+#Supplementary Fig3b
+ggplot(data = mddata, aes(x=cancer,y=contribution,fill=cancer)) + geom_bar(stat="identity",show.legend = F) + facet_grid(signature ~ group) +scale_y_continuous() + theme_bw() + theme(axis.text.x=element_text(size=8,angle =90,hjust =0.5,vjust = 0.5), axis.text.y = element_text(size=8), strip.text.y = element_text(size=10), panel.grid = element_blank()) + xlab("Cancer Type") + ylab("contribution")
+dev.off()
+#SupplementaryFig3c
+ggplot(data = midata, aes(x=cancer,y=contribution,fill=cancer)) + geom_bar(stat="identity",show.legend = F) + facet_grid(signature ~ group) +scale_y_continuous() + theme_bw() + theme(axis.text.x=element_text(size=8,angle =90,hjust =0.5,vjust = 0.5), axis.text.y = element_text(size=8), strip.text.y = element_text(size=10), panel.grid = element_blank()) + xlab("Cancer Type") + ylab("contribution")
+dev.off()
+
+
+```
+
+##Supplementary Figure2
+```{r figs2, echo=TRUE}
+load("smSNPs.sigminer.RData")
+show_catalogue(t(mt_tally_all$SBS_96), mode="SBS", style = "cosmic", x_label_angle = 90, y_tr = function(x) x / sum(mt_tally_all$SBS_96))
+show_catalogue(t(mt_tally_all$ID_83), mode="ID", style = "cosmic", x_label_angle = 90, y_tr = function(x) x / sum(mt_tally_all$ID_83))
+show_catalogue(t(mt_tally_all$DBS_78), mode="DBS", style = "cosmic", x_label_angle = 90, y_tr = function(x) x / sum(mt_tally_all$DBS_78))
+
+load("tcga.sigminer.RData")
+show_catalogue(t(mt_tally_all$SBS_96), mode="SBS", style = "cosmic", x_label_angle = 90, y_tr = function(x) x / sum(mt_tally_all$SBS_96))
+show_catalogue(t(mt_tally_all$ID_83), mode="ID", style = "cosmic", x_label_angle = 90, y_tr = function(x) x / sum(mt_tally_all$ID_83))
+show_catalogue(t(mt_tally_all$DBS_78), mode="DBS", style = "cosmic", x_label_angle = 90, y_tr = function(x) x / sum(mt_tally_all$DBS_78))
+
+
+```
+
+##Supplementary Figure4
+```{r figs4, echo=TRUE}
+data1 <- read.table("COAD.clin.info.txt", header=T, sep="\t")
+data2 <- read.table("UCEC.clin.info.txt", header=T, sep="\t")
+data3 <- read.table("STAD.clin.info.txt", header=T, sep="\t")
+
+#COAD
+surv_object2 <- Surv(time = data1$PFStime, event = data1$PFS)
+fit2 <- survfit(surv_object2 ~ chr5.88206508, data = data1)
+ggsurvplot(fit2, data = data1, pval = TRUE, title="COAD.rs558912554.TMEM161B")
+
+#UCEC
+surv_object22 <- Surv(time = data2$PFStime, event = data2$PFS)
+fit22 <- survfit(surv_object22 ~ chr10.116636766, data = data2)
+ggsurvplot(fit22, data = data2, pval = TRUE, title="UCEC.rs199682553.PNLIPRP2")
+
+surv_object23 <- Surv(time = data2$PFStime, event = data2$PFS)
+fit23 <- survfit(surv_object23 ~ chr14.50823156, data = data2)
+ggsurvplot(fit23, data = data2, pval = TRUE, title="UCEC.rs1547077.NIN")
+
+surv_object2 <- Surv(time = data2$PFStime, event = data2$PFS)
+fit2 <- survfit(surv_object2 ~ chr1.183544857, data = data2)
+ggsurvplot(fit2, data = data2, pval = TRUE, title="UCEC.rs372519216.SMG7")
+
+surv_object26 <- Surv(time = data2$PFStime, event = data2$PFS)
+fit26 <- survfit(surv_object26 ~ chr6.18258069, data = data2)
+ggsurvplot(fit26, data = data2, pval = TRUE, title="UCEC.rs749024423.DEK")
+
+#STAD
+surv_object29 <- Surv(time = data3$PFStime, event = data3$PFS)
+fit29 <- survfit(surv_object29 ~ chr2.91699879, data = data3)
+ggsurvplot(fit29, data = data3, pval = TRUE, title="STAD.rs199562278.AC027612.2")
+
+surv_object2 <- Surv(time = data3$PFStime, event = data3$PFS)
+fit2 <- survfit(surv_object2 ~ chr3.149968578, data = data3)
+ggsurvplot(fit2, data = data3, pval = TRUE, title="STAD.rs569365451.PFN2")
+
+surv_object2 <- Surv(time = data3$PFStime, event = data3$PFS)
+fit2 <- survfit(surv_object2 ~ chr3.27720073, data = data3)
+ggsurvplot(fit2, data = data3, pval = TRUE, title="STAD.rs532644800.EOMES")
+
+surv_object2 <- Surv(time = data3$PFStime, event = data3$PFS)
+fit2 <- survfit(surv_object2 ~ chr8.112503980, data = data3)
+ggsurvplot(fit2, data = data3, pval = TRUE, title="STAD.rs111461827.CSMD3")
+
+surv_object21 <- Surv(time = data3$PFStime, event = data3$PFS)
+fit21 <- survfit(surv_object21 ~ chr9.22451040, data = data3)
+ggsurvplot(fit21, data = data3, pval = TRUE, title="STAD.rs370079512.DMRTA1")
+```
+
+## Figure 3
+
+```{r fig3, echo=TRUE}
+#fig3a
+tdata <- read.table("summary.tcga.cancertype.dbsnp.table.regulatory.info.txt",header=T) 
+sdata <- tdata[tdata$Count>15,c(2,3,4,5,12,69,70)]
+sdata$SNP <- paste("chr",paste(sdata$Chr,sdata$Pos,sep=":"),sep="")
+colnames(sdata) <- c("Gene", "CHR", "BP", "NMISS", "Type", "Age", "Gender","SNP")
+#sdata <- read.table("TCGA.smSNPs.for.CMplot.txt",header=TRUE)
+sdata2 <- sdata[ ,c("SNP", "CHR", "BP","Age", "Gender")]
+
+SNPs <- sdata[sdata$Gender < (0.05/nrow(sdata)) | sdata$Age < (0.05/nrow(sdata)), ]
+tdd <- SNPs
+tdd$Type <- as.factor(tdd$Type)
+tdd$type <- as.numeric(tdd$Type)
+Genes <- tdd$Gene
+Snps <- tdd$SNP
+Pch <- tdd$type
+CMplot(sdata2, plot.type="c",r=2,cex=0.4, threshold=0.05/nrow(sdata2),signal.cex=0.6, LOG10=TRUE,outward=TRUE,cir.chr.h=0.5,cir.legend.cex=1,cir.band=2.5, chr.den.col = c("darkgreen","yellow","red"), bin.size=1e6, file="pdf", ylim=c(0,10), signal.line=NULL, memo="combine", multracks=TRUE, highlight = Snps, highlight.pch = Pch, highlight.col = NULL)
+
+#fig3b,c,d,e
+surv_object28 <- Surv(time = data3$PFStime, event = data3$PFS)
+fit28 <- survfit(surv_object28 ~ chr1.183544857, data = data3)
+ggsurvplot(fit28, data = data3, pval = TRUE, title="STAD.rs372519216.SMG7")
+surv_object27 <- Surv(time = data3$PFStime, event = data3$PFS)
+fit27 <- survfit(surv_object27 ~ chr14.50823156, data = data3)
+ggsurvplot(fit27, data = data3, pval = TRUE, title="STAD.rs1547077.NIN")
+surv_object24 <- Surv(time = data2$PFStime, event = data2$PFS)
+fit24 <- survfit(surv_object24 ~ chr1.154590148, data = data2)
+ggsurvplot(fit24, data = data2, pval = TRUE, title="UCEC.rs1491417364.ADAR")
+surv_object25 <- Surv(time = data2$PFStime, event = data2$PFS)
+fit25 <- survfit(surv_object25 ~ chr5.88206508, data = data2)
+ggsurvplot(fit25, data = data2, pval = TRUE, title="UCEC.rs558912554.TMEM161B")
+
+#fig3f,3g
+colors <- rev(pal_npg(alpha =0.9)(8))
+msdata <- read.table("STAD.UCEC.subclass.signature.SBS.txt",header=T)
+midata <- read.table("STAD.UCEC.subclass.signature.ID.txt",header=T)
+ggplot(data = msdata) + geom_boxplot(mapping = aes(x = signature, y = contribution, color=group),outlier.size = 0.5)  + theme_bw()+ theme(axis.text.y=element_text(size=8), axis.text.x = element_text(angle =45,hjust =0.5,vjust = 0.5,size=8), strip.text.y = element_text(size=10), panel.grid = element_blank()) + scale_color_manual(values = colors) +  scale_fill_manual(values = colors) + xlab("SBS signature") + ylab("contribution")  + guides(color = guide_legend( nrow = 4, byrow = TRUE))
+ggplot(data = midata) + geom_boxplot(mapping = aes(x = signature, y = contribution, color=group),outlier.size = 0.5)  + theme_bw()+ theme(axis.text.y=element_text(size=8), axis.text.x = element_text(size=8), strip.text.y = element_text(size=10), panel.grid = element_blank()) + scale_color_manual(values = colors) +  scale_fill_manual(values = colors) + xlab("ID signature") + ylab("contribution")  + guides(color = guide_legend( nrow = 4, byrow = TRUE))
+
+#fig3g,3i
+#Rscript read.maf.R
+```
+
+##Figure4
+```{r fig4, echo=TRUE}
+sdata <- read.table("motif.count.sort.tsv",header=F)
+sdata$V3 <- sdata$V2 / 341709
+sdata$V4 <- str_split_fixed(sdata$V1, "-",2)[,1]
+sdata$V5 <- str_split_fixed(sdata$V1, "-",2)[,2]
+colnames(sdata) <- c("K","count","fre","id","motif")
+sdata$id <- as.numeric(sdata$id)
+sdata$motif <- factor(sdata$motif, levels = sdata$motif[order(sdata$id, decreasing=TRUE)])
+
+cdata <- read.table("merge.cancer.motif.txt", header=F)
+colnames(cdata) <- c("cancer","motif","count","sum")
+cdata$fre <- cdata$count / cdata$sum
+cdata$motif <- factor(cdata$motif,levels = sdata$motif[order(sdata$id, decreasing=TRUE)])
+colors35 <- c("#F7A441","#F4E25D","orangered","orangered4","orchid","orchid1","orchid4","palegoldenrod","palegreen","palegreen3","palegreen4","paleturquoise3","paleturquoise4","palevioletred","palevioletred4","papayawhip","peachpuff2","peachpuff3","peachpuff4","peru","pink","pink3","pink4","plum","plum4","purple","purple4","royalblue","royalblue4","salmon","seagreen","seashell3","skyblue3","slateblue","slateblue4")
+
+ggplot(cdata,aes(x="",y=fre,fill=motif)) + geom_bar(stat = "identity", color = "white") + coord_polar("y") +scale_fill_manual(values = colors35) + facet_wrap( ~ cancer, nrow = 7) + theme_void()
+dev.off()
+
+bdata <- read.table("merge.tcga.dbsnp.motif.background.txt", header=T)
+color2 <- rev(pal_npg(alpha =0.9)(3))
+bdata$Motif <- factor(bdata$Motif,levels = sdata$motif[order(sdata$id, decreasing=TRUE)])
+ggplot(bdata,aes(x=Motif,y=fre)) + geom_col(aes(color=Type,fill=Type),position = position_dodge(0.8), width = 0.7) + scale_color_manual(values = color2) +  scale_fill_manual(values = color2) + theme_bw() + theme( panel.grid = element_blank(),axis.text.x=element_text(angle =90,hjust =0.5,vjust = 0.5, size=8)) + xlab("Motif") + ylab("Frequency") +  scale_y_sqrt() + coord_flip()
+```
